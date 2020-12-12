@@ -6,6 +6,7 @@ FusionImage is a node based image library for Blackmagic Design Fusion.
 
 - Kristof Indeherberge
 - Cédric Duriau
+- Andrew Hazelden
 
 ## Installation
 
