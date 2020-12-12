@@ -19,3 +19,4 @@ FusionImage is a node based image library for Blackmagic Design Fusion.
 **Fuses**
 
 - `imagefromfile.fuse`: Fuse to read an image.
+- `imagefromclipboard.fuse`: Fuse to grabs, save then load the current clipboard image.
