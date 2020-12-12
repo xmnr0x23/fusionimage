@@ -1,0 +1,59 @@
+--[[--
+    Based on Daniel Koch's GetClipboard fuse
+    https://eyeondev.blogspot.com/2010/03/loading-clipboard-bitmap-into-fusion.html
+    Note: Windows only for now
+--]]--
+
+-- ============================================================================
+-- modules
+-- ============================================================================
+
+-- ============================================================================
+-- constants
+-- ============================================================================
+FUSE_NAME = "ImageFromClipboard"
+DATATYPE = "Image"
+
+-- ============================================================================
+-- fuse
+-- ============================================================================
+FuRegisterClass(FUSE_NAME, CT_Tool, {
+    REGID_DataType = DATATYPE,
+    REGID_InputDataType = DATATYPE,
+    REG_NoCommonCtrls = true,
+    REGS_Category = "Vonk\\Image\\IO",
+    REGS_Name = FUSE_NAME,
+    REGS_OpDescription = "Grabs, saves then loads the current clipboard image.",
+    REGS_OpIconString = FUSE_NAME
+})
+
+function Create()
+    InGrab = self:AddInput("Grab", "Grab", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ButtonControl",
+        INP_DoNotifyChanged = true,
+        })
+
+    OutData = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+        })
+
+    -- get current path
+    localdir = string.match(debug.getinfo(1).source, '@(.*\\).-$')
+    --dump( localdir )
+    filepath = os.getenv( "TEMP" ) .. '\\clipboard.bmp'
+    --dump( filepath )
+end
+
+function NotifyChanged(inp, param, time)
+    if inp == InGrab and param and param.Value == 1 then
+        bmd.executebg( '"' .. localdir .. 'clipboard2bmp.exe" ' .. filepath, true)
+    end
+end
+
+function Process(req)
+    local clip = Clip(filepath)
+    out = clip:GetFrame(0)
+    OutData:Set(req, out)
+end
