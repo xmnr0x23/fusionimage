@@ -1,0 +1,134 @@
+--[[--
+Based on Andrew Hazelden's GetFrame fuse and added a feature that will allow a user to create the filename based on text operations and pipe it to the loader.
+Note: there is a known bug with the Fusion v9-16.0 Fuse API's "Clip:GetFrame()" function. The 2D imagery output by the GetFrame function in the current Fuse API isn't able to be applied as a texture map on objects in the Fusion 3D workspace. This issue is noticeable if you connect the GetFrame.fuse's 2D image output datastream to a node like a 3D material input connection and try to view the 3D material in Fusion 3D's viewer context. This Fuse API bug will cause Fusion to insta-crash and exit immediately.
+--]]--
+
+-- ============================================================================
+-- modules
+-- ============================================================================
+
+-- ============================================================================
+-- constants
+-- ============================================================================
+FUSE_NAME = "ImageFromFile"
+DATATYPE = "Image"
+
+-- ============================================================================
+-- fuse
+-- ============================================================================
+FuRegisterClass(FUSE_NAME, CT_Tool, {
+    REGID_DataType = DATATYPE,
+    REGID_InputDataType = DATATYPE,
+    REG_NoCommonCtrls = true,
+    REGS_Category = "Vonk\\Image\\IO",
+    REGS_Name = FUSE_NAME,
+    REGS_OpDescription = "Reads an Image object from a file.",
+    REGS_OpIconString = FUSE_NAME
+})
+
+function Create()
+    -- [[ Creates the user interface. ]]
+    InFile = self:AddInput("Input" , "Input" , {
+        LINKID_DataType = "Text",
+        INPID_InputControl = "FileControl",
+        FC_IsSaver = false,
+        FC_ClipBrowse = false,
+        --FCS_FilterString =  "JSON (*.json)|*.json",
+        LINK_Main = 1
+    })
+
+    InStaticFrame = self:AddInput("Static Frame", "StaticFrame", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_DoNotifyChanged = true,
+        INP_Integer = true,
+        INP_Default = 1.0,
+        ICD_Width = 1,
+    })
+    
+    InShowInput = self:AddInput("Show Input", "ShowInput", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Integer = true,
+        INP_Default = 0.0,
+        INP_External = false,
+        INP_DoNotifyChanged = true
+    })
+
+    OutData = self:AddOutput("Output" , "Output" , {
+        LINKID_DataType = "Image",
+        LINK_Main = 1
+    })
+end
+
+function NotifyChanged(inp, param, time)
+    --[[
+        Handles all input control events.
+
+        :param inp: Input that triggered a signal.
+        :type inp: Input
+
+        :param param: Parameter object holding the (new) value.
+        :type param: Parameter
+
+        :param time: Current frame number.
+        :type time: float
+    ]]
+    if inp == InShowInput then
+        local visible
+        if param.Value == 1.0 then visible = true else visible = false end
+        InFile:SetAttrs({LINK_Visible = visible})
+    end
+end
+
+function Process(req)
+	-- Read the filename
+    local rel_path = InFile:GetValue(req).Value
+    local abs_path = self.Comp:MapPath(rel_path)
+    local filename = abs_path
+
+	-- Read the frame mode
+	local staticFrame = InStaticFrame:GetValue(req).Value
+
+	-- Link connection port
+	-- Todo: Possibly read and merge in the "Link" input connection's image metadata stream with the GetFrame native metadata Lua table values
+	--local imgLinkConnection = InLink:GetSource(req.Time, req:GetFlags())
+
+	-- Verify the file exists
+    if bmd.fileexists(filename) == true then
+        -- Get the image clip
+        local clip = Clip(filename)
+
+        -- Is this a static frame or an image sequence
+        if staticFrame == 1 then
+            -- Read the first frame of the image sequence
+            out = clip:GetFrame(0)
+        else
+            -- Read the image from disk
+            out = clip:GetFrame(req.Time)
+
+            -- Read the first frame of a movie
+            -- out = clip:GetFrame(self.Comp.CurrentTime - self.Comp.GlobalStart)
+        end
+
+        -- print('[GetFrame Filename]', clip.Filename)
+
+        -- Push the result to the node's output connection
+        OutData:Set(req, out)
+    else
+        -- Fallback to a blank canvas when no image is found
+        local compWidth = self.Comp:GetPrefs('Comp.FrameFormat.Width') or 1920
+        local compHeight = self.Comp:GetPrefs('Comp.FrameFormat.Height') or 1080
+
+        emptyImage = Image({
+            IMG_Width = compWidth,
+            IMG_Height = compHeight,
+            })
+
+        -- Pixel defaults to black/clear
+        emptyImage:Fill(Pixel())
+
+        -- Push the empty result to the node's output connection
+        OutData:Set(req, emptyImage)
+    end
+end
